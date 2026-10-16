@@ -24,6 +24,7 @@
 import ctypes as C
 from ctypes import wintypes as W
 import hashlib, json, os, struct, subprocess, time
+import traceback
 from pathlib import Path
 import pefile
 from ..domain import settings_store as local_scene_settings
@@ -139,6 +140,8 @@ def run(args):
         # ---- 副本构建 + 视频补丁 ----
         exe, meta = args.stage_client(stage, args)
         result.update(meta)
+        if getattr(args, 'room_mailbox', None):
+            args.room_mailbox.start()
         result['lobby_preview'] = True
         result['preview_patches'] = json.loads((run / 'preview-patches.json').read_text())
         patched = bytearray(exe.read_bytes())
@@ -275,6 +278,8 @@ def run(args):
                 blob = mem(0xdbff0c0, len(profile_fixture))
                 if blob != mem(0xdbff0c0, len(profile_fixture)):
                     return
+                from .profile_transport import local_save_blob
+                blob = local_save_blob(blob, profile_fixture, profile_meta)
                 digest = hashlib.sha256(blob).hexdigest()
                 if digest == last_profile_sha:
                     return
@@ -367,6 +372,12 @@ def run(args):
                     arm(0x6336e0, 'Resource open')
                     arm(0x58c6ce, 'IIPS events created')
                     arm(0xddab8ac, 'Engine error')
+                    if getattr(args, 'trace_weapon_build', False):
+                        from .weapon_diagnostics import BUILD_POINTS
+                        for point, expected, label in BUILD_POINTS:
+                            if mem(point, len(expected)) != expected:
+                                raise ValueError('武器创建诊断断点字节不匹配：' + hex(point))
+                            arm(point, 'Weapon build ' + label)
                     arm(0x6c5730, 'Settings apply')
                     arm(0x49a8e0, 'Settings restart')
                     arm(0xddaa03e, 'Settings native restart')
@@ -426,6 +437,22 @@ def run(args):
                         if name.startswith('Loading '):
                             row['state'] = lobby_state()
                         row['registers'] = {label: hex(struct.unpack_from('<I', ctx, offset)[0]) for label, offset in [('ebp', 180), ('eax', 176), ('ecx', 172), ('edx', 168), ('ebx', 164), ('esi', 160), ('edi', 156)]}
+                        if name.startswith('Weapon build '):
+                            # 有界创建路径跟踪，每个点最多 256 次，逐条落盘保留错误前的原因。
+                            from .weapon_diagnostics import capture_build_step
+                            try:
+                                row['weapon_build'] = capture_build_step(
+                                    mem, int(row['registers']['ebp'], 16), row['registers'])
+                            except (OSError, ValueError, struct.error, IndexError) as exc:
+                                row['diagnostic_error'] = str(exc)
+                            trace_hits[name] = trace_hits.get(name, 0) + 1
+                            row['hit'] = trace_hits[name]
+                            with (run / 'weapon-build-trace.jsonl').open('a', encoding='utf-8') as stream:
+                                stream.write(json.dumps(row) + '\n')
+                            if trace_hits[name] < 256:
+                                rearm[event.tid] = (address, name)
+                                flags = struct.unpack_from('<I', ctx, 192)[0]
+                                struct.pack_into('<I', ctx, 192, flags | 256)
                         if name == 'Seed local profile':
                             # ---- 档案注入：以基准 fixture 为底，加载用户存档 ----
                             profile_folder = ROOT / 'local-profile-loadout'
@@ -556,6 +583,25 @@ def run(args):
                             row['iips_event_handle'] = hex(struct.unpack('<I', mem(0x2b999c0, 4))[0])
                             row['iips_object'] = hex(struct.unpack('<I', mem(0x2b998b4, 4))[0])
                             row['argument_strings'] = [cstring(x) if x > 0x10000 else '' for x in struct.unpack('<4I', mem(esp + 4, 16))]
+                            if name == 'Engine error':
+                                # Com_Error(code, fmt, ...) 的栈布局是：返回地址、错误码、
+                                # 格式串指针、变参。上面的解析从 esp+4 连读四个"字符串"，
+                                # 把错误码当成了指针，真正的消息其实在 esp+8——这就是早先
+                                # 只能看到空串和错位内容的原因。这里按真实布局再取一次。
+                                fields = struct.unpack('<6I', mem(esp + 4, 24))
+                                row['error_code'] = fields[0]
+                                row['error_text'] = cstring(fields[1]) if fields[1] > 0x10000 else ''
+                                row['error_arguments'] = list(fields[2:])
+                                # 178 调用点先经 0x63cb50 格式化再调用 Com_Error；
+                                # 此处余下栈槽是调用者保留的格式化参数，不能统一当作
+                                # Com_Error 的变参。额外采集双手对象与装备标记定位切枪。
+                                from .weapon_diagnostics import capture_weapon_error
+                                weapon_error = capture_weapon_error(
+                                    mem, esp, int(row['registers']['ebp'], 16))
+                                if weapon_error is not None:
+                                    row['weapon_diagnostic'] = weapon_error
+                                # 同时附上最近缺失的资源，便于判断是不是缺文件引发的。
+                                row['recent_missing_files'] = loading_clock.recent_missing(16)
                         if name in ('MessageBoxA', 'MessageBoxW'):
                             # 错误弹窗在展示前截获；仅硬件变更确认弹窗放行。
                             values = struct.unpack('<5I', mem(esp, 20))
@@ -606,8 +652,13 @@ def run(args):
                     if name not in ('CreateFileA', 'CreateFileW', 'ResourceMissingA', 'ResourceMissingW'):
                         result['exceptions'].append(row)
                     if name == 'Engine error' and getattr(args, 'stop_engine_error', False):
-                        result['stopped_reason'] = 'Stopped at diagnostic engine error'
-                        break
+                        from .match_events import is_battle_disconnect
+                        if is_battle_disconnect(row.get('argument_strings', []),
+                                                getattr(args, 'player_channel', None) is not None):
+                            row['milestone'] = 'Native battle disconnect'
+                        else:
+                            result['stopped_reason'] = 'Stopped at diagnostic engine error'
+                            break
                     if name.startswith('MessageBox') and row.get('dialog_kind') != 'confirmation':
                         result['stopped_reason'] = 'Captured error dialog before display'
                         break
@@ -746,6 +797,9 @@ def run(args):
                     close(thread)
     except Exception as exc:
         result['error'] = repr(exc)
+        # 保存失败调用链，区分副本读写、受限进程与保护组件启动错误。
+        # 仅记录异常栈，不抓取局部变量，避免把玩家通道令牌写入证据。
+        result['traceback'] = traceback.format_exc()
         result['passed'] = False
     finally:
         # ---- 统一清理：无论成败都保存证据并结束子进程 ----

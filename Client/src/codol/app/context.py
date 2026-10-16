@@ -21,7 +21,7 @@ from ..domain.readiness import LobbyObserver
 from ..domain import settings_store
 
 
-def prepare(config, stop_when_ready, seconds):
+def prepare(config, stop_when_ready, seconds, online=False):
     """装配一次会话，返回 (参数对象, 就绪观察者)。
 
     ``stop_when_ready`` 为 True 时（smoke 命令）大厅就绪即自动结束；
@@ -51,5 +51,10 @@ def prepare(config, stop_when_ready, seconds):
         argument=['-qa', '+set', 'r_fullscreen', '0'],
         resource_provider=provider, state_observer=observer,
         stage_client=staging.build, stop_engine_error=True,
+        # 临时只读取证开关：定位双持创建失败，默认关闭以免增加游戏线程断点开销。
+        trace_weapon_build=os.environ.get('CODOL_TRACE_WEAPON_BUILD') == '1',
     )
+    if online:
+        from ..online.channel import PlayerChannel
+        args.player_channel = PlayerChannel(PROJECT.parent, account, config.name)
     return args, observer

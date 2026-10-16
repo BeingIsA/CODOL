@@ -25,6 +25,7 @@ def build_parser():
     parser.add_argument('--game', type=Path)
     parser.add_argument('--username')
     parser.add_argument('--seconds', type=int, default=None)
+    parser.add_argument('--online', action='store_true', help='连接本机 M2 开发控制服务并启用原生建房')
     return parser
 
 
@@ -55,8 +56,10 @@ def main(argv=None):
     # launch 的默认时限为 0（不限时），smoke 必须显式给时限。
     seconds = options.seconds if options.seconds is not None else (180 if options.command == 'smoke' else 0)
     if options.command == 'stage':
+        if options.online:
+            parser.error('--online 仅用于 launch/smoke，不在纯 stage 中创建在线会话')
         return lifecycle.run_stage(config, options.command, seconds)
-    return lifecycle.run_session(config, options.command, seconds)
+    return lifecycle.run_session(config, options.command, seconds, online=options.online)
 
 
 def entry():

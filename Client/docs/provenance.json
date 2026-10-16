@@ -1,0 +1,72 @@
+[
+  {
+    "source": "runtime\\game\\appcontainer_probe.py",
+    "sha256": "9add962a6e3f5d6b8415c9138db11d3b8546edae9bc89e6231a16b34f1cb53c7",
+    "module": "win32"
+  },
+  {
+    "source": "runtime\\game\\local_file_stage.py",
+    "sha256": "d2d1daa3299f11de78a64d10dfb4e6557532a67e36443a07e29b7456f4d2dfc3",
+    "module": "files"
+  },
+  {
+    "source": "runtime\\game\\local_scene_settings.py",
+    "sha256": "de9431afe461f218fdc68f266cb852d8c91cfd10cea5c57fc243850d035d8be2",
+    "module": "settings"
+  },
+  {
+    "source": "runtime\\game\\local_profile_store.py",
+    "sha256": "786431e366c0521ad74daac5a3e07692d1fed17018aff5b834f0f33a8f33812f",
+    "module": "profiles"
+  },
+  {
+    "source": "runtime\\game\\expand_inventory_layout.py",
+    "sha256": "31e48d9d31d00f9ad9d294e60c27c69ad79ec0a76e76354b67ee28ba801f1790",
+    "module": "inventory_layout"
+  },
+  {
+    "source": "runtime\\game\\capture_profile_schema.py",
+    "sha256": "c36c831b63319e23c6da2250e7bbad8192e6ec4b01e1444515679f7de7175870",
+    "module": "schema"
+  },
+  {
+    "source": "runtime\\game\\seed_local_progression.py",
+    "sha256": "af7ac16a4098ead2cb24011666cabcb498d2d862c2b890b9b0e7bb26b254ed59",
+    "module": "progression"
+  },
+  {
+    "source": "runtime\\game\\local_resource_provider.py",
+    "sha256": "431741150b76de48cfe6a8180f564ae992540906b9d357ef9c691d56797322fc",
+    "module": "resources"
+  },
+  {
+    "source": "runtime\\game\\decode_loose_resources.py",
+    "sha256": "43a03053bf0ab693c5a3c3697b7522a32ec28737de2719394cb92fef12f9da54",
+    "module": "codec"
+  },
+  {
+    "source": "runtime\\game\\stage_access2697.py",
+    "sha256": "93a5dd6475cf5f70499bf38cd56992fc4bd3340f05e4b04c7415c5c942680113",
+    "module": "stage_access"
+  },
+  {
+    "source": "runtime\\game\\startup_dialog2697.py",
+    "sha256": "70c4e2c5b43fdef2f661d0711dfc1681d251d6f6d24998619eca340d245ca3b2",
+    "module": "dialogs"
+  },
+  {
+    "source": "runtime\\game\\server2697\\lobby_runtime2697.py",
+    "sha256": "0fdb10fc9955d744616aeda8bdfa4ec73f95066eea4b1683b4d8c7a9321ff04f",
+    "module": "resource_gate"
+  },
+  {
+    "source": "runtime\\game\\server2697\\local_candidate_probe.py",
+    "sha256": "48211646df9901d4536dda1d89c66fa0eeb381594a1424bf806b6c8cbde15d43",
+    "module": "patches"
+  },
+  {
+    "source": "runtime\\game\\server2697\\local_candidate_probe.py",
+    "sha256": "48211646df9901d4536dda1d89c66fa0eeb381594a1424bf806b6c8cbde15d43",
+    "module": "session"
+  }
+]

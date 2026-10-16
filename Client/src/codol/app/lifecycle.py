@@ -67,14 +67,14 @@ def run_stage(config, command, seconds):
         return 0
 
 
-def run_session(config, command, seconds):
+def run_session(config, command, seconds, online=False):
     """启动完整调试会话（codol launch / smoke 命令体），返回退出码。
 
     流程：装配 → 打开游戏（调试会话）→ 结果归类 → 写 summary.json。
     活动会话标记在会话期间写入 data/active.json，供 stop 命令定位。
     """
     with exclusive_session():
-        args, observer = prepare(config, command == 'smoke', seconds)
+        args, observer = prepare(config, command == 'smoke', seconds, online=online)
         print('本次日志：' + str(args.run_directory), flush=True)
         _reclaim_old_runtimes()
         from ..v2697.session import run
@@ -86,6 +86,10 @@ def run_session(config, command, seconds):
         try:
             report = run(args)
         finally:
+            if getattr(args, 'room_mailbox', None):
+                args.room_mailbox.close()
+            elif getattr(args, 'player_channel', None):
+                args.player_channel.close()
             active.unlink(missing_ok=True)
         errors = failures(report)
         if not observer.ready:

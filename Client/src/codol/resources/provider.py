@@ -18,6 +18,7 @@ Provider 是一个可调用对象，由版本适配层的"资源文件门"（v26
 from pathlib import Path
 import hashlib, json, re, shutil, subprocess
 from .codec import decode
+from .archive_index import build_index
 from ..paths import ASSETS as ROOT
 GAME = Path(__import__('os').environ['CODOL2697_GAME_DIR'])
 
@@ -39,47 +40,72 @@ class Provider:
         self.events = []       # 补件事件流水（写入 local-resource-supplies.json）
         self.cache = ROOT / 'local-resource-cache'
         self.cache.mkdir(exist_ok=True)
-        # 只索引四类可补资源：贴图、模型目录、音效、中文 fastfile。
-        # 文件名部分排除控制字符与 Windows 非法字符。
-        pattern = re.compile(b'(?im)^(main[/\\\\][^\\x00-\\x1f\\x7f-\\xff:<>"|?*]+?\\.(?:iwi|mp3|wav)|main[/\\\\]models[/\\\\][a-z0-9_/\\\\-]+|client_shipretail[/\\\\][^\\x00-\\x1f\\x7f-\\xff:<>"|?*]+?\\.ff)\\r?$')
-        for archive in (GAME / 'IIPS/IIPSDownload').glob('*.ifs'):
-            with archive.open('rb') as stream:
-                prefix = stream.read(1024 * 1024)
-            for match in pattern.finditer(prefix):
-                name = match.group().decode('ascii').strip().replace('\\', '/')
-                # 防路径逃逸：拒绝绝对路径与 .. 。
-                if Path(name).is_absolute() or '..' in Path(name).parts:
-                    continue
-                self.index.setdefault(name.lower(), []).append((archive, name))
+        # 统一资源索引同时收录 hires-only 贴图的 main/images 别名。
+        self.index = build_index((GAME / 'IIPS/IIPSDownload').glob('*.ifs'))
         (self.cache / 'index.json').write_text(json.dumps({k: [a.name for a, n in v] for k, v in self.index.items()}, indent=2))
+
+    # 事件流水上限：只保留最近若干条，避免长时间会话把证据文件撑爆。
+    MAX_EVENTS = 5000
+
+    def _record(self, event):
+        """追加一条补件事件并落盘，供事后回答"补上了吗、为什么没补上"。
+
+        写入点固定为副本目录旁（会话目录）的 ``local-resource-supplies.json``。
+        """
+        self.events.append(event)
+        if len(self.events) > self.MAX_EVENTS:
+            del self.events[:len(self.events) - self.MAX_EVENTS]
+        if self.stage is not None:
+            (self.stage.parent / 'local-resource-supplies.json').write_text(json.dumps(self.events, indent=2))
+
+    def _reject(self, reason, filename, relative=None):
+        """登记一次"没有补件"及其原因。
+
+        这些分支早先直接 ``return``：一次会话 174 次缺资源、0 次补上，
+        却因为没有任何留痕而查不到原因。现在每个分支都留下一条可查记录。
+        """
+        self._record({'resource': relative if relative is not None else str(filename),
+                      'requested': str(filename), 'supplied': False,
+                      'rejected': reason, 'attempts': []})
 
     def __call__(self, filename):
         """尝试为客户端补一个缺失文件；不适用则直接返回。
 
         只处理：副本目录内的相对路径（或指向副本内的绝对路径）、
         尚未尝试过、且命中四类补件模式的读取请求。
+        每个"不适用"的分支都会记录原因（见 ``_reject``）。
         """
         if self.stage is None:
+            self._reject('stage-not-set', filename)
             return
         # 设备路径（\\、\??\）与副本外的绝对路径不是游戏资源请求。
         if not filename or filename.startswith(('\\\\', '\\??\\')):
+            self._reject('device-or-empty-path', filename)
             return
         target = Path(filename)
         if target.is_absolute() and (not str(target).lower().startswith(str(self.stage).lower() + '\\')):
+            self._reject('outside-stage', filename)
             return
         if not target.is_absolute():
             target = self.stage / target
         try:
             target = target.resolve()
         except OSError:
+            self._reject('unresolvable-path', filename)
             return
         try:
             relative = target.relative_to(self.stage.resolve()).as_posix().lower()
         except ValueError:
+            self._reject('outside-stage-after-resolve', filename)
             return
-        if target.exists() or relative in self.attempted:
+        if target.exists():
+            self._reject('already-exists', filename, relative)
+            return
+        if relative in self.attempted:
+            self._reject('already-attempted', filename, relative)
             return
         if not (relative.startswith('main/images/') and relative.endswith('.iwi') or (relative.startswith('main/models/') and (not target.suffix)) or (relative.startswith('main/sound/') and target.suffix.lower() in ('.mp3', '.wav')) or (relative.startswith('client_shipretail/chinese/') and target.suffix.lower() == '.ff')):
+            self._reject('not-a-managed-category', filename, relative)
             return
         self.attempted.add(relative)
         event = {'resource': relative, 'supplied': False, 'attempts': []}
@@ -107,7 +133,7 @@ class Provider:
                 for listing in folder.glob('*.lst'):
                     for item in listing.read_text(encoding='utf-8-sig').splitlines():
                         clean = item.replace('\\', '/')
-                        if clean.lower() == relative:
+                        if clean.lower() == name.lower():
                             decode_name = clean.rsplit('/', 1)[-1]
                             break
                 raw = source.read_bytes()
@@ -130,5 +156,7 @@ class Provider:
                 break
             except Exception as exc:
                 event['attempts'].append({'archive': archive.name, 'error': repr(exc)})
-        self.events.append(event)
-        (self.stage.parent / 'local-resource-supplies.json').write_text(json.dumps(self.events, indent=2))
+        if not event['supplied'] and not event['attempts']:
+            # 索引里根本没有这个资源的候选包，也就是"想补也无从下手"。
+            event['rejected'] = 'no-candidate-in-index'
+        self._record(event)

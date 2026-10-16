@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<!-- CODOL 控制服务管理页（M1）。纯静态无构建：由服务直接托管，只通过 /api 交互。 -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CODOL 控制服务</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- 登录视图：未持有效会话令牌时显示 -->
+<section id="view-login" class="card center hidden">
+  <h1>CODOL 控制服务</h1>
+  <p class="muted">独立管理服务 · M1。首次运行的账号密码在服务端
+    <code>data/初始管理员凭据.txt</code> 中（仅生成一次）。</p>
+  <form id="login-form">
+    <label>用户名 <input id="login-user" autocomplete="username" value="admin" required></label>
+    <label>密码 <input id="login-pass" type="password" autocomplete="current-password" required></label>
+    <button type="submit">登录</button>
+    <p id="login-error" class="error"></p>
+  </form>
+</section>
+
+<!-- 主视图 -->
+<div id="view-main" class="hidden">
+  <header>
+    <span class="brand">CODOL 控制服务</span>
+    <nav>
+      <button data-tab="overview" class="tab active">总览</button>
+      <button data-tab="rooms" class="tab">房间</button>
+      <button data-tab="runtime" class="tab">运行时</button>
+      <button data-tab="diagnostics" class="tab">诊断</button>
+      <button data-tab="account" class="tab">账户</button>
+    </nav>
+    <span id="conn-badge" class="badge">连接中…</span>
+  </header>
+
+  <!-- 总览 -->
+  <main id="tab-overview" class="tab-panel">
+    <div class="grid">
+      <div class="card"><h3>服务状态</h3><div id="ov-service" class="kv"></div></div>
+      <div class="card"><h3>房间</h3><div id="ov-rooms" class="kv"></div></div>
+      <div class="card"><h3>玩家连接</h3><div id="ov-players" class="kv"></div></div>
+      <div class="card"><h3>运行时</h3><div id="ov-runtime" class="kv"></div></div>
+    </div>
+    <p class="muted">关闭本页面不会停止服务；停服请用「账户」页或 GameServer/control/Stop.cmd。</p>
+  </main>
+
+  <!-- 房间 -->
+  <main id="tab-rooms" class="tab-panel hidden">
+    <div class="card">
+      <h3>房间列表</h3>
+      <div id="rooms-list"></div>
+    </div>
+    <p class="muted" id="rooms-note"></p>
+  </main>
+
+  <!-- 运行时 -->
+  <main id="tab-runtime" class="tab-panel hidden">
+    <div class="card">
+      <h3>对局控制（M3）</h3>
+      <div id="rt-matches"></div>
+    </div>
+    <div class="card">
+      <h3>原生运行时（契约预检，只读）</h3>
+      <div id="rt-probe" class="kv"></div>
+      <button id="rt-reprobe" class="primary">重新深度探测（全量哈希，耗时数十秒）</button>
+    </div>
+    <p class="muted">开局使用契约验证过的地图/模式组合；对局状态由服务端按模拟时钟与真人数推进。</p>
+  </main>
+
+  <!-- 诊断 -->
+  <main id="tab-diagnostics" class="tab-panel hidden">
+    <div class="card"><h3>原生运行历史（.server-runs）</h3><div id="dg-runs"></div></div>
+    <div class="card"><h3>服务日志尾部（已脱敏）</h3><div id="dg-logs" class="log"></div></div>
+  </main>
+
+  <!-- 账户 -->
+  <main id="tab-account" class="tab-panel hidden">
+    <div class="card">
+      <h3>修改密码</h3>
+      <form id="pwd-form">
+        <label>当前密码 <input id="pwd-old" type="password" required></label>
+        <label>新密码（至少 8 字符） <input id="pwd-new" type="password" required minlength="8"></label>
+        <button type="submit">修改密码</button>
+        <p id="pwd-msg"></p>
+      </form>
+    </div>
+    <div class="card danger">
+      <h3>停止服务</h3>
+      <p>优雅停服：停止接收请求、写审计、关闭数据库。浏览器关闭不会触发此操作。</p>
+      <button id="shutdown-btn" class="danger">停止服务</button>
+      <p id="shutdown-msg"></p>
+    </div>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

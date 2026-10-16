@@ -1,0 +1,68 @@
+/* CODOL 控制服务管理页样式：单文件、无依赖、深色管理台风格。 */
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: #10141c; color: #e6e9f0;
+  font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+.hidden { display: none !important; }
+.muted { color: #8b93a7; }
+.error { color: #ff7b72; min-height: 1.2em; }
+.ok { color: #3fb950; }
+.warn { color: #d29922; }
+
+.card {
+  background: #171c26; border: 1px solid #262d3d; border-radius: 10px;
+  padding: 16px 20px; margin: 14px 0;
+}
+.card.center { max-width: 420px; margin: 10vh auto; }
+.card.danger { border-color: #6e2a2a; }
+.card h3 { margin: 0 0 10px; font-size: 15px; color: #cdd6e4; }
+
+header {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding: 10px 20px; background: #151a24; border-bottom: 1px solid #262d3d;
+  position: sticky; top: 0;
+}
+.brand { font-weight: 600; letter-spacing: .5px; }
+nav { display: flex; gap: 6px; flex: 1; }
+.tab {
+  background: none; border: none; color: #8b93a7; padding: 6px 12px;
+  border-radius: 6px; cursor: pointer; font-size: 14px;
+}
+.tab.active { background: #232b3b; color: #fff; }
+.badge { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #232b3b; }
+.badge.ok { background: #12351f; color: #3fb950; }
+.badge.bad { background: #3d1d1d; color: #ff7b72; }
+
+main { padding: 8px 20px 40px; max-width: 1100px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.kv div { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
+.kv span:nth-child(2) { color: #cdd6e4; text-align: right; word-break: break-all; }
+
+label { display: block; margin: 10px 0; }
+input {
+  width: 100%; padding: 8px 10px; margin-top: 4px;
+  background: #0e1219; color: #e6e9f0; border: 1px solid #2c3548; border-radius: 6px;
+}
+button {
+  background: #2c3548; color: #e6e9f0; border: none; border-radius: 6px;
+  padding: 8px 16px; cursor: pointer; margin-top: 8px; font-size: 14px;
+}
+button:hover { background: #38445c; }
+button.primary { background: #1f4a78; }
+button.primary:hover { background: #27578d; }
+button.danger { background: #6e2a2a; }
+button.danger:hover { background: #8a3535; }
+button:disabled { opacity: .5; cursor: wait; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #232a39; }
+th { color: #8b93a7; font-weight: 500; }
+
+.log {
+  max-height: 380px; overflow: auto; background: #0e1219;
+  border-radius: 6px; padding: 10px; font: 12px/1.55 Consolas, monospace;
+  white-space: pre-wrap; word-break: break-all;
+}
+.empty { color: #8b93a7; padding: 18px 4px; text-align: center; }
+code { background: #0e1219; padding: 1px 6px; border-radius: 4px; }

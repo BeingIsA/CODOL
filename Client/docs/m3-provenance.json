@@ -1,0 +1,57 @@
+{
+  "version": "2.6.9.7",
+  "milestone": "M3",
+  "boundary": "M3 客户端入场：战斗通道（2.6.9.7 原生 UDP）与客户端战斗传输桥为自维护代码，地址、字节布局与调用步骤依据旧项目 client_native_loopback.cpp 的实测方案移植整理；服务端 sh1x_endmatch 复用本项目 M0 基线的原生 exitLevel 投递路径，不是新增逆向成果。控制通道与本地邮箱为项目自身设计。不宣称全量从零重写。",
+  "references_only": {
+    "D://Games//Launcher source code//portable-launcher//source//client//client_native_loopback.cpp": "d120937198085d05d351c1fac57f44bbd9ad8b1b3be7edcc1ccfa732744621b5",
+    "D://Games/Launcher source code//server2697//native//src//codol//script//codol_script_exitlevel_trace.c": "fe9f7ae2580ee81eb814a919e5f297cea2e180addef943552e60d41641a9fc36"
+  },
+  "maintained_files": {
+    "Client/native/match_transport2697.h": "M3 新增：回环 UDP 套接字、本地包队列 hook(0x5b1cf0/0x5b1c30)、连接初始化(0x499a00)、地图预载(0x49eee0，地图/模式参数化)、离开前台(0x621230)、帧钩子（时间缩放恢复 + state 归零回房）、m3_pump_match 消费对局投影（revision 去重）。",
+    "Client/native/room_bridge2697.cpp": "M3 扩展：start_room 由占位改为发 kind 5 开局意图；泵集成 m3_pump_match（战斗中跳过房间泵）；m3_room_returned_from_match 回房回调。房间职责与 M2 一致，未新增网络能力。",
+    "Client/src/codol/v2697/room_mailbox.py": "M3 扩展：意图 kind 5（开局）；m3-match.bin 对局投影（独立 M3ST 结构，含 nonce/revision/state/host/port/native_id/map/mode）；非回环入场地址强制收敛为 127.0.0.1。",
+    "Client/src/codol/v2697/match_events.py": "M3 扩展：战斗断开分类白名单纳入 EXE_MATCHENDED（对局正常结束的良性离场通知）；EXE_ERR_SERVER_TIMEOUT 等仍判为失败。",
+    "GameServer/native/src/codol/net/codol_match_end.c": "M3 新增：RCON 命令 sh1x_endmatch。复用本项目原生 CODOL_Scr_ExitLevel 的投递路径，向已收到 gamestate 的真人客户端投递可靠命令 t \"EXE_MATCHENDED\"，不旋转地图、不结束本方对局。"
+  },
+  "runtime_dependency_on_reference_project": false,
+  "licenses": "保留既有来源/许可证边界；上述参考文件自身无单独许可证声明，不据此把项目维护代码统称为第三方。",
+  "post_m3_fixes": [
+    "2026-10-16 取消准备按钮不可点修复：本地锁 ready_value 与向 Flash 公布的准备位分离（ready_visible()=ready_value&&m3_transport_active()，房间阶段恒公布 0），依据旧项目 client_room2697.cpp 关于 FsgGameLobbyView 全员准备即禁用取消按钮的实测注释；改动 room_bridge2697.cpp 与 room_flash2697.h，DLL 哈希随之更新，用户实机确认解决。",
+    "match_transport2697.h 哈希与 M3 登记不一致属 M9 切枪修复期改动未及时回填；native_build 下各项哈希以 Client/native/build/build.json 当前值为准。"
+  ],
+  "native_build": {
+    "source_sha256": "6ee0af787a1d2b30894405b0e9dcee7194a0030da69690e4e9caf74b86187fc5",
+    "inputs": {
+      "match_transport2697.h": "0f43daa45a1fd8d713c23c4306aeafc93a6119e109e5ffcf968de68ae8e4d89c",
+      "room_bridge2697.cpp": "6ee0af787a1d2b30894405b0e9dcee7194a0030da69690e4e9caf74b86187fc5",
+      "room_flash2697.h": "d2ba51a4a798ac7f6586d018c53017deae7e299f8464712eb76ee582022015e0",
+      "room_preview2697.h": "223f3ce592adc315f744e20d3ca94e8a7d3caa393cc67cd5d506435b739cfe2f"
+    },
+    "dll_sha256": "aafff047a39136ad659f6e36c43d4528f6b165d0882d6b6774fd748218af7fb3",
+    "command": [
+      "D:\\Games\\CODOL\\GameServer\\.toolchain\\msys64\\mingw32\\bin\\g++.exe",
+      "-m32",
+      "-std=c++17",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-shared",
+      "-static-libgcc",
+      "-static-libstdc++",
+      "-Wl,--kill-at",
+      "-o",
+      "D:\\Games\\CODOL\\Client\\native\\build\\room_bridge2697.dll",
+      "D:\\Games\\CODOL\\Client\\native\\room_bridge2697.cpp",
+      "-lws2_32"
+    ],
+    "record": "Client/native/build/build.json（由 Client/tools/build_room_bridge.py 生成）",
+    "verify": "Client/tools/verify_room_bridge.py 通过：导入仅 kernel32/msvcrt/ws2_32，无 GUI 依赖。"
+  },
+  "server_native_build": {
+    "exe_sha256": "6256b69a93a9b9a80b57b6ccf8cf993c6f00b3349174447f2f55dc8eda67ab6a",
+    "new_sources": {
+      "GameServer/native/src/codol/net/codol_match_end.c": "a507b55b62c4c1be9aada80314b30e6f7bf18f98be59954d6abd4626dcbe0e45"
+    },
+    "network_audit": "GameServer/tools/audit_network.py + verify_network_boundary.py 已按新 EXE 哈希重新绑定并通过。"
+  }
+}

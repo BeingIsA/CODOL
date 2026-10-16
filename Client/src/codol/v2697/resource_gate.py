@@ -242,6 +242,9 @@ class LoadingClock:
     因此报告注明口径，不冒充引擎耗时。
     """
 
+    # 最多保留的缺失文件名条数：够定位问题，又不让 result.json 无限膨胀。
+    MISSING_NAMES = 256
+
     def __init__(self, clock=None):
         import time
         self.clock = clock or time.perf_counter
@@ -250,7 +253,8 @@ class LoadingClock:
         self.event_label = None
         self.handlers = {}      # 标签 -> {calls, seconds, max_seconds}
         self.milestones = []    # 里程碑时刻的计时快照
-        self.extensions = {}    # 缺失文件计数（按扩展名；当前不区分）
+        self.extensions = {}    # 缺失文件计数（按扩展名）
+        self.missing_files = [] # 最近缺失的完整文件名（取证用）
 
     def resume(self):
         """客户端恢复运行：记录自然时间起点。"""
@@ -285,12 +289,26 @@ class LoadingClock:
         return row
 
     def missing(self, filename):
-        """登记一次缺失文件（当前按单一桶计数，不做扩展名细分）。"""
-        ext = True
+        """登记一次缺失文件：按扩展名计数，并保留最近的完整文件名。
+
+        早先这里把扩展名写成了常量 ``True``，结果只留下 ``{"true": N}``，
+        缺的究竟是哪些文件完全查不到——定位资源问题必须能看到文件名。
+        """
+        name = str(filename)
+        # 扩展名取最后一个点之后的部分；没有点或点在末位算无后缀。
+        stem, dot, suffix = name.rpartition('.')
+        ext = ('.' + suffix.lower()) if (dot and suffix) else '(无后缀)'
         if ext not in self.extensions and len(self.extensions) >= 64:
             ext = '(other)'
         self.extensions[ext] = self.extensions.get(ext, 0) + 1
+        self.missing_files.append(name)
+        if len(self.missing_files) > self.MISSING_NAMES:
+            del self.missing_files[:len(self.missing_files) - self.MISSING_NAMES]
+
+    def recent_missing(self, count=32):
+        """返回最近若干次缺失的文件名（最新的在前）。"""
+        return list(reversed(self.missing_files[-count:]))
 
     def report(self):
         """输出计时报告（含口径说明）。"""
-        return dict(milestones=self.milestones, handlers=self.handlers, missing_extensions=self.extensions, note='Handler seconds exclude debug-event wait, OS scheduling and observer work outside event handling.')
+        return dict(milestones=self.milestones, handlers=self.handlers, missing_extensions=self.extensions, recent_missing_files=self.recent_missing(), note='Handler seconds exclude debug-event wait, OS scheduling and observer work outside event handling.')

@@ -1,0 +1,41 @@
+{
+  "version": "2.6.9.7",
+  "boundary": "控制通道与本地邮箱新写；原生地址、房间/角色/相机/Flash 调用依据旧研究移植整理，不宣称全量从零重写",
+  "references_only": {
+    "D:\\Games\\Launcher source code\\server2697\\client_room2697.cpp": "f488bd6d8cc8e318906db2c4726b0419893c9f5eb8fd04bf581deef73114590b",
+    "D:\\Games\\Launcher source code\\server2697\\room_ui_inspect2697.cpp": "c593213578107ec589ea055fe2f6199e2c0b7c51f934c083d4f9dd566d8dcddc",
+    "D:\\Games\\Launcher source code\\server2697\\run_room_match2697.py": "63bcfb501d10caba967d33e0afbb03dd21810d5520f594ecae8c2a12a92ec0b1"
+  },
+  "maintained_files": {
+    "Client/native/room_bridge2697.cpp": "原生房间 vtable / 字节前置核对、有限意图和服务器快照投影；无网络或战斗启动",
+    "Client/native/room_preview2697.h": "参考 client_room2697.cpp 的 refresh_room_preview / LocalRoomPump 场景与相机步骤",
+    "Client/native/room_flash2697.h": "参考 room_ui_inspect2697.cpp 的 GFxValue / callsign，以及原房间 avatar slots 绑定；UID 改由服务端传入",
+    "Client/src/codol/v2697/room_staging.py": "参考 run_room_match2697.py 的 59d070 安全队列调度；未迁入开战/连接/本地服务器路径"
+  },
+  "runtime_dependency_on_reference_project": false,
+  "licenses": "保留既有来源/许可证边界；上述参考文件自身无单独许可证声明，不据此把项目维护代码统称为第三方。",
+  "native_build": {
+    "source_sha256": "81d09dbc6d29f1bb91650218c1c348943a4a9fc6fe0764782f2a45734da8e19f",
+    "inputs": {
+      "room_bridge2697.cpp": "81d09dbc6d29f1bb91650218c1c348943a4a9fc6fe0764782f2a45734da8e19f",
+      "room_flash2697.h": "ed8c638e92bc5b3cf4b712847e481fbbe20944a6dee17656293677f30e487483",
+      "room_preview2697.h": "223f3ce592adc315f744e20d3ca94e8a7d3caa393cc67cd5d506435b739cfe2f"
+    },
+    "dll_sha256": "ded3e35a17483b2c1c50e75db002102214548e86a799b11ec2704cbf638e052c",
+    "command": [
+      "D:\\Games\\CODOL\\GameServer\\.toolchain\\msys64\\mingw32\\bin\\g++.exe",
+      "-m32",
+      "-std=c++17",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-shared",
+      "-static-libgcc",
+      "-static-libstdc++",
+      "-Wl,--kill-at",
+      "-o",
+      "D:\\Games\\CODOL\\Client\\native\\build\\room_bridge2697.dll",
+      "D:\\Games\\CODOL\\Client\\native\\room_bridge2697.cpp"
+    ]
+  }
+}

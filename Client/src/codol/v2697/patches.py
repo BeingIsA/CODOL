@@ -52,6 +52,9 @@ def stage_candidate(folder, args):
     assert raw[off:off + 3] == bytes.fromhex('558bec')
     raw[off:off + 3] = bytes.fromhex('33c0c3')
     preview_patches = []
+    # 武器缓存修复独立于大厅引导，必须在每次副本构建时安装并登记。
+    from .weapon_cache import preserve_initial_model
+    preview_patches.append(preserve_initial_model(raw, pe))
     # 预置三个全局状态：UI 模式=5、连接状态=2、数据状态=6，
     # 让客户端进入"离线大厅"分支而不是等待远端连接。
     code = b''.join((b'\xc7\x05' + struct.pack('<II', addr, value) for addr, value in [(0x747c890, 5), (0x747c8c0, 2), (0xd25f8c, 6)])) + b'\xc3'

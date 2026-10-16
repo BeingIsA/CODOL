@@ -18,7 +18,7 @@ from ..paths import ASSETS
 from ..infra.fsutil import link_or_copy
 
 
-def install_identity(exe, name):
+def install_identity(exe, name, native_id=4294967297):
     """在补丁后的 EXE 尾部加 ``.lobby`` 节，注入本地身份，返回摘要。
 
     节内容 = 一段引导代码 + 两份编码的用户名：
@@ -87,10 +87,43 @@ def install_identity(exe, name):
     replace(0x5b95e9, bytes.fromhex('751e'), bytes.fromhex('eb1e'))
     # 一段依赖远端对象状态的判断序列替换为本地常量路径。
     before = bytes.fromhex('8b0d00ca4707535633d233c05785c9750a8b0d0cca470785c9740be8597c4e008b50208b4024')
-    after = bytes.fromhex('535657ba01000000b801000000')
+    # 此处不是标准 EDX:EAX 返回 ABI：后续原指令先 push EAX、再 push EDX，
+    # 作为 printf 的 64 位栈参数，因此 EDX 必须为低位、EAX 必须为高位。
+    # 旧本地 UID 的高低位恰好都是 1，掩盖了把两者接反的问题。
+    after = bytes.fromhex('535657ba') + struct.pack('<I', native_id & 0xffffffff) + b'\xb8' + struct.pack('<I', native_id >> 32)
     replace(0x5b9717, before, after + b'\x90' * (len(before) - len(after)))
     exe.write_bytes(raw)
-    return {'name': name, 'local_uid': 4294967297, 'section': '.lobby', 'sha256': hashlib.sha256(raw).hexdigest()}
+    return {'name': name, 'local_uid': native_id, 'section': '.lobby', 'sha256': hashlib.sha256(raw).hexdigest()}
+
+
+# 启动前资源自检的下限：低于任一值说明副本资源残缺，必须明确报错而不是
+# 让客户端跑到一半因为缺资源崩溃。数值取自完整基线的实测数量并留有余量
+# （基线含 fastfile 179、模型 5236、贴图 14090、音效 9290）。
+MINIMUM_RESOURCES = {'fastfile': 100, 'models': 3000, 'images': 8000, 'sound': 3000}
+# 统计哪些类别：相对副本根目录的 glob 模式 -> 报告里的名字。
+# 用 '**' 递归是必须的：音效全部落在 main/sound/ 的子目录里
+# （amb_elements、mp、vehicles……），只匹配一级会漏掉九成以上而误判残缺。
+RESOURCE_PATTERNS = [('client_shipretail/chinese/**/*.ff', 'fastfile'),
+                     ('main/models/**/*', 'models'),
+                     ('main/images/**/*.iwi', 'images'),
+                     ('main/sound/**/*', 'sound')]
+
+
+def resource_inventory(stage):
+    """统计副本里的资源文件数量（按类别），供启动前自检使用。"""
+    return {label: sum(1 for path in stage.glob(pattern) if path.is_file())
+            for pattern, label in RESOURCE_PATTERNS}
+
+
+def verify_resource_inventory(counts):
+    """核对资源数量是否达到下限，返回缺少的 {类别: (实际, 下限)}。
+
+    空的字典表示通过。这是"防复发"的闸门：资源残缺要在启动前暴露，
+    而不是等到玩家切枪时引擎加载失败才崩。
+    """
+    return {label: (counts.get(label, 0), minimum)
+            for label, minimum in MINIMUM_RESOURCES.items()
+            if counts.get(label, 0) < minimum}
 
 
 def build(stage, args):
@@ -98,9 +131,27 @@ def build(stage, args):
 
     ``stage`` 为受限运行目录；``args`` 为应用层装配的参数对象
     （使用其 resource_provider 与 username）。
+
+    资源按"可信者优先、后来者只补缺"的顺序铺放，且一律先到先得：
+    1. ``decoded-resources``（由 stage_candidate 铺）；
+    2. ``resource-baseline``（IFS 全量解出的完整资源树）；
+    3. ``local-resource-cache/decoded``（运行期补件沉淀下来的缓存）。
     """
     exe, report = patches.stage_candidate(stage, args)
     args.resource_provider.stage = stage
+    # 铺完整资源基线：运行时补件实测不可靠（一次会话 174 次缺失、0 次补上），
+    # 因此改为启动前把 IFS 全量解出来的资源树铺进副本，只补已有文件之缺。
+    baseline = ASSETS / 'resource-baseline/decoded'
+    supplied = 0
+    if baseline.is_dir():
+        for source in baseline.rglob('*'):
+            if source.is_file():
+                target = stage / source.relative_to(baseline)
+                if not target.exists():
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    link_or_copy(source, target)
+                    supplied += 1
+    report['baseline_resources'] = {'available': baseline.is_dir(), 'supplied': supplied}
     # 预填解码缓存：把 local-resource-cache/decoded 里已有的一切放进副本，
     # 已存在的目标跳过——staging 阶段不覆盖任何文件。
     cache = ASSETS / 'local-resource-cache/decoded'
@@ -110,7 +161,21 @@ def build(stage, args):
             if not target.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 link_or_copy(source, target)
+    # 启动前自检：资源不够就在进游戏之前失败，并说清楚缺哪一类。
+    counts = resource_inventory(stage)
+    report['resource_inventory'] = counts
+    shortfall = verify_resource_inventory(counts)
+    report['resource_shortfall'] = shortfall
+    if shortfall:
+        raise RuntimeError('副本资源不完整，拒绝启动：' + '；'.join(
+            '%s 只有 %d 个（下限 %d）' % (label, actual, minimum)
+            for label, (actual, minimum) in sorted(shortfall.items())))
     report['local_settings'] = settings_store.stage(stage)
-    report['identity'] = install_identity(exe, args.username)
+    channel = getattr(args, 'player_channel', None)
+    report['identity'] = install_identity(exe, args.username, channel.player['native_id'] if channel else 4294967297)
     report['candidate_sha256'] = report['identity']['sha256']
+    if channel:
+        from .room_staging import install
+        report['room_bridge'] = install(exe, stage, args)
+        report['candidate_sha256'] = report['room_bridge']['candidate_sha256']
     return exe, report
